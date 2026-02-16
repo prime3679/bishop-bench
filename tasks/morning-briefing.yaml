@@ -1,0 +1,31 @@
+name: "morning-briefing"
+description: "Generate a comprehensive morning briefing with weather, calendar, and email"
+prompt: |
+  Build a morning briefing covering:
+  1. Current weather and forecast for today
+  2. Today's calendar events (next 3-4 upcoming)
+  3. Recent important emails (unread or from last 24h)
+  4. Any actionable items or urgent matters
+  
+  Format this as a clear, scannable briefing that could be read in 2-3 minutes.
+  Include relevant details but keep it concise and actionable.
+
+expected_capabilities:
+  - web_search
+  - calendar_read  
+  - email_read
+
+scoring_criteria:
+  - completeness       # Did it cover all requested sections?
+  - accuracy          # Is the information factually correct?
+  - formatting        # Is it well-structured and readable?
+  - actionability     # Does it highlight what needs attention?
+
+timeout: 120  # seconds
+
+# Expected model behavior:
+# - Should use web search for weather
+# - Should attempt to read calendar (may fail in test environment)
+# - Should attempt to read email (may fail in test environment) 
+# - Should format output clearly with sections
+# - Should provide actionable summary of urgent items

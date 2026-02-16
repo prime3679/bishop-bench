@@ -1,0 +1,38 @@
+{
+  "name": "bishop-bench",
+  "version": "0.1.0",
+  "description": "Model routing benchmark for AI assistants",
+  "main": "evals/run.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "eval": "node evals/run.js",
+    "score": "node scoring/score.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/prime3679/bishop-bench.git"
+  },
+  "keywords": [
+    "ai",
+    "benchmark",
+    "llm",
+    "model-routing",
+    "evaluation",
+    "anthropic",
+    "openai"
+  ],
+  "author": "Adrian",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/prime3679/bishop-bench/issues"
+  },
+  "homepage": "https://github.com/prime3679/bishop-bench#readme",
+  "dependencies": {
+    "js-yaml": "^4.1.0",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
