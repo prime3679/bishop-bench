@@ -8,7 +8,7 @@ const OpenAI = require('openai');
 
 // Supported models and their configurations
 const MODELS = {
-  'claude-haiku-3.5-latest': {
+  'claude-3-5-haiku-latest': {
     name: 'Claude Haiku 3.5',
     provider: 'anthropic',
     cost_per_1m_tokens: { input: 0.80, output: 4.00 }
@@ -18,7 +18,7 @@ const MODELS = {
     provider: 'anthropic',
     cost_per_1m_tokens: { input: 3.00, output: 15.00 }
   },
-  'claude-opus-4-6': {
+  'claude-opus-4-20250514': {
     name: 'Claude Opus 4.6',
     provider: 'anthropic',
     cost_per_1m_tokens: { input: 15.00, output: 75.00 }
