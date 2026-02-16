@@ -3,36 +3,42 @@
 const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
+const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 
 // Supported models and their configurations
 const MODELS = {
-  'anthropic/claude-haiku': {
-    name: 'Claude Haiku',
+  'claude-haiku-3.5-latest': {
+    name: 'Claude Haiku 3.5',
     provider: 'anthropic',
-    cost_per_1k_tokens: { input: 0.00025, output: 0.00125 }
+    cost_per_1m_tokens: { input: 0.80, output: 4.00 }
   },
-  'anthropic/claude-sonnet': {
-    name: 'Claude Sonnet', 
+  'claude-sonnet-4-20250514': {
+    name: 'Claude Sonnet 4',
     provider: 'anthropic',
-    cost_per_1k_tokens: { input: 0.003, output: 0.015 }
+    cost_per_1m_tokens: { input: 3.00, output: 15.00 }
   },
-  'anthropic/claude-opus': {
-    name: 'Claude Opus',
-    provider: 'anthropic', 
-    cost_per_1k_tokens: { input: 0.015, output: 0.075 }
+  'claude-opus-4-6': {
+    name: 'Claude Opus 4.6',
+    provider: 'anthropic',
+    cost_per_1m_tokens: { input: 15.00, output: 75.00 }
   },
-  'openai/gpt-5.3-codex': {
-    name: 'GPT-5.3 Codex',
+  'gpt-5.2-codex': {
+    name: 'GPT-5.2 Codex',
     provider: 'openai',
-    cost_per_1k_tokens: { input: 0.01, output: 0.03 }
+    cost_per_1m_tokens: { input: 1.75, output: 14.00 }
   }
 };
+
+const DEFAULT_TIMEOUT_MS = 120000;
 
 class BishopEvaluator {
   constructor() {
     this.tasksDir = path.join(__dirname, '..', 'tasks');
     this.resultsDir = path.join(__dirname, '..', 'results');
     this.ensureDirectories();
+    this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
 
   ensureDirectories() {
@@ -60,68 +66,184 @@ class BishopEvaluator {
     return tasks;
   }
 
+  extractAnthropicText(message) {
+    if (!message || !Array.isArray(message.content)) return '';
+    return message.content
+      .filter(part => part && part.type === 'text')
+      .map(part => part.text)
+      .join('');
+  }
+
+  extractOpenAIText(response) {
+    if (response && typeof response.output_text === 'string') return response.output_text;
+    if (!response || !Array.isArray(response.output)) return '';
+    const chunks = [];
+    for (const item of response.output) {
+      if (!item || !Array.isArray(item.content)) continue;
+      for (const part of item.content) {
+        if (part && part.type === 'output_text' && typeof part.text === 'string') {
+          chunks.push(part.text);
+        }
+      }
+    }
+    return chunks.join('');
+  }
+
+  async withTimeout(promise, timeoutMs) {
+    let timeoutId;
+    const timeoutPromise = new Promise((_, reject) => {
+      timeoutId = setTimeout(() => {
+        const error = new Error(`Request timed out after ${timeoutMs}ms`);
+        error.code = 'ETIMEDOUT';
+        reject(error);
+      }, timeoutMs);
+    });
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
   // Execute a task against a specific model
-  async executeTask(task, modelId, modelConfig) {
-    console.log(`Running task "${task.name}" on ${modelConfig.name}...`);
-    
-    const startTime = Date.now();
-    
-    // TODO: Implement actual model API calls
-    // This is a skeleton - would need to integrate with:
-    // - Anthropic API for Claude models
-    // - OpenAI API for GPT models
-    // - Include tool calling capabilities
-    
-    const mockResult = {
+  async executeTask(task, modelId, modelConfig, options = {}) {
+    const { dryRun = false, runIndex = 1, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+    console.log(`Running task "${task.name}" on ${modelConfig.name} (run ${runIndex})...`);
+
+    const startTime = process.hrtime.bigint();
+
+    const baseResult = {
       task_name: task.name,
       model_id: modelId,
       model_name: modelConfig.name,
+      run_index: runIndex,
       timestamp: new Date().toISOString(),
       prompt: task.prompt,
       expected_capabilities: task.expected_capabilities,
-      
-      // Mock response data (to be replaced with real API calls)
-      output: `Mock output for ${task.name} from ${modelConfig.name}`,
-      
-      // Performance metrics
-      latency_ms: Date.now() - startTime,
-      input_tokens: 150,  // Mock token count
-      output_tokens: 300, // Mock token count  
-      total_tokens: 450,
-      
-      // Cost calculation
-      cost_usd: this.calculateCost(150, 300, modelConfig.cost_per_1k_tokens),
-      
+
+      output: '',
+
+      latency_ms: 0,
+      input_tokens: 0,
+      output_tokens: 0,
+      total_tokens: 0,
+
+      cost_usd: 0,
+
       // Tool usage (to be populated by real execution)
       tools_called: [],
       tools_successful: 0,
       tools_failed: 0,
-      
-      // Error handling
+
       error: null,
       completed: true,
       timeout_exceeded: false
     };
-    
-    return mockResult;
+
+    if (dryRun) {
+      const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+      return {
+        ...baseResult,
+        output: '[DRY RUN] No API call executed.',
+        latency_ms: Math.round(latencyMs),
+        completed: true
+      };
+    }
+
+    try {
+      let response;
+
+      if (modelConfig.provider === 'anthropic') {
+        if (!process.env.ANTHROPIC_API_KEY) {
+          throw new Error('Missing ANTHROPIC_API_KEY env var');
+        }
+        response = await this.withTimeout(
+          this.anthropic.messages.create({
+            model: modelId,
+            max_tokens: 1024,
+            messages: [{ role: 'user', content: task.prompt }]
+          }),
+          timeoutMs
+        );
+        const outputText = this.extractAnthropicText(response);
+        const inputTokens = response.usage?.input_tokens || 0;
+        const outputTokens = response.usage?.output_tokens || 0;
+        const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+        return {
+          ...baseResult,
+          output: outputText,
+          latency_ms: Math.round(latencyMs),
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          total_tokens: inputTokens + outputTokens,
+          cost_usd: this.calculateCost(inputTokens, outputTokens, modelConfig.cost_per_1m_tokens)
+        };
+      }
+
+      if (modelConfig.provider === 'openai') {
+        if (!process.env.OPENAI_API_KEY) {
+          throw new Error('Missing OPENAI_API_KEY env var');
+        }
+        response = await this.withTimeout(
+          this.openai.responses.create({
+            model: modelId,
+            input: [{ role: 'user', content: task.prompt }]
+          }),
+          timeoutMs
+        );
+        const outputText = this.extractOpenAIText(response);
+        const inputTokens = response.usage?.input_tokens || 0;
+        const outputTokens = response.usage?.output_tokens || 0;
+        const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+        return {
+          ...baseResult,
+          output: outputText,
+          latency_ms: Math.round(latencyMs),
+          input_tokens: inputTokens,
+          output_tokens: outputTokens,
+          total_tokens: inputTokens + outputTokens,
+          cost_usd: this.calculateCost(inputTokens, outputTokens, modelConfig.cost_per_1m_tokens)
+        };
+      }
+
+      throw new Error(`Unsupported provider: ${modelConfig.provider}`);
+    } catch (error) {
+      const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+      const status = error?.status || error?.response?.status;
+      const isTimeout = error?.code === 'ETIMEDOUT';
+      const isRateLimit = status === 429 || error?.code === 'rate_limit';
+      const errorMessage = isRateLimit
+        ? `Rate limit: ${error.message}`
+        : isTimeout
+          ? error.message
+          : error.message || 'Unknown error';
+
+      return {
+        ...baseResult,
+        latency_ms: Math.round(latencyMs),
+        error: errorMessage,
+        completed: false,
+        timeout_exceeded: isTimeout
+      };
+    }
   }
 
   calculateCost(inputTokens, outputTokens, pricing) {
-    const inputCost = (inputTokens / 1000) * pricing.input;
-    const outputCost = (outputTokens / 1000) * pricing.output;
+    const inputCost = (inputTokens / 1_000_000) * pricing.input;
+    const outputCost = (outputTokens / 1_000_000) * pricing.output;
     return Math.round((inputCost + outputCost) * 1000000) / 1000000; // Round to 6 decimal places
   }
 
   // Run evaluation across all specified tasks and models
   async runEvaluation(options = {}) {
-    const { taskFilter = null, modelFilter = null } = options;
+    const { taskFilter = null, modelFilter = null, runs = 1, dryRun = false } = options;
     
     const tasks = this.loadTasks(taskFilter);
     const modelsToTest = modelFilter 
       ? modelFilter.split(',').map(m => m.trim())
       : Object.keys(MODELS);
     
-    console.log(`Running ${tasks.length} task(s) across ${modelsToTest.length} model(s)...`);
+    console.log(`Running ${tasks.length} task(s) across ${modelsToTest.length} model(s) with ${runs} run(s) each...`);
     
     const results = [];
     
@@ -133,18 +255,24 @@ class BishopEvaluator {
           console.warn(`⚠️  Unknown model: ${modelId}`);
           continue;
         }
-        
-        try {
-          const result = await this.executeTask(task, modelId, MODELS[modelId]);
-          results.push(result);
-        } catch (error) {
-          console.error(`❌ Error running ${task.name} on ${modelId}:`, error.message);
-          results.push({
-            task_name: task.name,
-            model_id: modelId,
-            error: error.message,
-            completed: false
-          });
+
+        for (let runIndex = 1; runIndex <= runs; runIndex += 1) {
+          try {
+            const result = await this.executeTask(task, modelId, MODELS[modelId], {
+              dryRun,
+              runIndex
+            });
+            results.push(result);
+          } catch (error) {
+            console.error(`❌ Error running ${task.name} on ${modelId}:`, error.message);
+            results.push({
+              task_name: task.name,
+              model_id: modelId,
+              run_index: runIndex,
+              error: error.message,
+              completed: false
+            });
+          }
         }
       }
     }
@@ -166,16 +294,24 @@ async function main() {
   const options = {};
   
   // Parse command line arguments
-  for (let i = 0; i < args.length; i += 2) {
+  for (let i = 0; i < args.length; i += 1) {
     const flag = args[i];
-    const value = args[i + 1];
     
     switch (flag) {
       case '--task':
-        options.taskFilter = value;
+        options.taskFilter = args[i + 1];
+        i += 1;
         break;
       case '--models':
-        options.modelFilter = value;
+        options.modelFilter = args[i + 1];
+        i += 1;
+        break;
+      case '--runs':
+        options.runs = Number(args[i + 1] || 1);
+        i += 1;
+        break;
+      case '--dry-run':
+        options.dryRun = true;
         break;
       case '--help':
         console.log(`
@@ -186,6 +322,8 @@ Usage: node run.js [options]
 Options:
   --task <name>      Run specific task only
   --models <list>    Comma-separated list of models to test
+  --runs <n>         Run each task N times (default 1)
+  --dry-run          Skip API calls and record empty results
   --help             Show this help message
 
 Available models:
