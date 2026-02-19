@@ -48,14 +48,14 @@ class BishopEvaluator {
   }
 
   // Load task definitions from YAML files
-  loadTasks(taskFilter = null) {
-    const taskFiles = fs.readdirSync(this.tasksDir)
+  async loadTasks(taskFilter = null) {
+    const taskFiles = (await fs.promises.readdir(this.tasksDir))
       .filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
 
     const tasks = [];
     for (const file of taskFiles) {
       const taskPath = path.join(this.tasksDir, file);
-      const content = fs.readFileSync(taskPath, 'utf8');
+      const content = await fs.promises.readFile(taskPath, 'utf8');
       const task = yaml.load(content);
       
       if (!taskFilter || task.name === taskFilter) {
@@ -238,7 +238,7 @@ class BishopEvaluator {
   async runEvaluation(options = {}) {
     const { taskFilter = null, modelFilter = null, runs = 1, dryRun = false } = options;
     
-    const tasks = this.loadTasks(taskFilter);
+    const tasks = await this.loadTasks(taskFilter);
     const modelsToTest = modelFilter 
       ? modelFilter.split(',').map(m => m.trim())
       : Object.keys(MODELS);
@@ -281,7 +281,7 @@ class BishopEvaluator {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const resultsFile = path.join(this.resultsDir, `eval-${timestamp}.json`);
     
-    fs.writeFileSync(resultsFile, JSON.stringify(results, null, 2));
+    await fs.promises.writeFile(resultsFile, JSON.stringify(results, null, 2));
     console.log(`\\n📊 Results saved to: ${resultsFile}`);
     
     return results;
@@ -345,3 +345,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopEvaluator };
