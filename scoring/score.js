@@ -2,10 +2,14 @@
 
 const fs = require('fs');
 const path = require('path');
+const yaml = require('js-yaml');
+const OpenAI = require('openai');
 
 class BishopScorer {
   constructor() {
     this.resultsDir = path.join(__dirname, '..', 'results');
+    this.tasksDir = path.join(__dirname, '..', 'tasks');
+    this.openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
   }
 
   // Load evaluation results from JSON file
@@ -32,8 +36,122 @@ class BishopScorer {
     return path.join(this.resultsDir, files[0]);
   }
 
+  // Load task definitions from YAML files
+  loadTasks() {
+    const taskFiles = fs.readdirSync(this.tasksDir)
+      .filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
+
+    const tasksMap = {};
+    for (const file of taskFiles) {
+      const taskPath = path.join(this.tasksDir, file);
+      const content = fs.readFileSync(taskPath, 'utf8');
+      const task = yaml.load(content);
+      tasksMap[task.name] = task;
+    }
+
+    return tasksMap;
+  }
+
+  async evaluateContentQuality(task, result) {
+    if (!this.openai || !task) return null;
+
+    const prompt = `You are an expert judge evaluating the quality of an AI response.
+Task: ${task.description}
+Prompt: ${task.prompt}
+Criteria: ${task.scoring_criteria ? task.scoring_criteria.join(', ') : 'completeness, accuracy, formatting'}
+
+Response:
+${result.output}
+
+Rate the quality on a scale of 0.0 to 1.0 based on the criteria.
+Return ONLY a valid JSON object with:
+{
+  "score": <float 0.0-1.0>,
+  "reasoning": "<short explanation>"
+}`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0
+      });
+      const parsed = JSON.parse(completion.choices[0].message.content);
+      return parsed.score;
+    } catch (e) {
+      console.warn(`Quality evaluation failed: ${e.message}`);
+      return null;
+    }
+  }
+
+  async detectHallucinations(task, result) {
+    if (!this.openai || !task) return null;
+
+    const prompt = `You are an expert fact-checker. Detect any hallucinations in the AI response.
+Task: ${task.description}
+Prompt: ${task.prompt}
+
+Response:
+${result.output}
+
+Does the response contain any hallucinated information, made-up facts, or content not supported by the prompt/context (if applicable)?
+Return ONLY a valid JSON object with:
+{
+  "hallucination_score": <float 0.0 (no hallucinations) to 1.0 (severe hallucinations)>,
+  "reasoning": "<short explanation>"
+}`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0
+      });
+      const parsed = JSON.parse(completion.choices[0].message.content);
+      return parsed.hallucination_score;
+    } catch (e) {
+      console.warn(`Hallucination detection failed: ${e.message}`);
+      return null;
+    }
+  }
+
+  async evaluateTaskAccuracy(task, result) {
+    if (!this.openai || !task) return null;
+
+    const prompt = `You are an expert judge. Check if the AI response strictly follows the instructions.
+Task: ${task.description}
+Prompt: ${task.prompt}
+Expected Capabilities: ${task.expected_capabilities ? task.expected_capabilities.join(', ') : 'N/A'}
+
+Response:
+${result.output}
+
+Does the response strictly follow all instructions and requirements?
+Return ONLY a valid JSON object with:
+{
+  "accuracy_score": <float 0.0 (failed) to 1.0 (perfect)>,
+  "reasoning": "<short explanation>"
+}`;
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        temperature: 0
+      });
+      const parsed = JSON.parse(completion.choices[0].message.content);
+      return parsed.accuracy_score;
+    } catch (e) {
+      console.warn(`Accuracy evaluation failed: ${e.message}`);
+      return null;
+    }
+  }
+
   // Calculate scoring metrics for a single result
-  scoreResult(result, task) {
+  async scoreResult(result, task) {
     const scores = {
       completion_rate: result.completed ? 1.0 : 0.0,
       error_rate: result.error ? 1.0 : 0.0,
@@ -56,18 +174,29 @@ class BishopScorer {
         ? result.cost_usd / result.output_tokens 
         : 0,
       
-      // TODO: Add more sophisticated scoring
-      // - Content quality (would need LLM-as-judge)
-      // - Hallucination detection
-      // - Task-specific accuracy metrics
-      quality_score: 0.5 // Placeholder - needs implementation
+      // Sophisticated scoring
+      quality_score: 0.5, // Placeholder/Default
+      hallucination_score: 0.0, // Default (optimistic)
+      accuracy_score: 0.0 // Default
     };
+
+    if (this.openai && task && result.output) {
+      const [quality, hallucination, accuracy] = await Promise.all([
+        this.evaluateContentQuality(task, result),
+        this.detectHallucinations(task, result),
+        this.evaluateTaskAccuracy(task, result)
+      ]);
+
+      if (quality !== null) scores.quality_score = quality;
+      if (hallucination !== null) scores.hallucination_score = hallucination;
+      if (accuracy !== null) scores.accuracy_score = accuracy;
+    }
     
     return scores;
   }
 
   // Generate comparison table across models and tasks
-  generateComparison(results) {
+  async generateComparison(results, tasksMap = {}) {
     const comparison = {
       summary: {},
       by_task: {},
@@ -92,22 +221,36 @@ class BishopScorer {
       modelGroups[modelId].push(result);
     }
 
+    // Pre-calculate scores for all results with batching
+    const scoresMap = new Map();
+    const batchSize = 5;
+
+    for (let i = 0; i < results.length; i += batchSize) {
+      const batch = results.slice(i, i + batchSize);
+      await Promise.all(batch.map(async (r) => {
+        if (!r.completed && !r.error) return;
+        const task = tasksMap[r.task_name];
+        const score = await this.scoreResult(r, task);
+        scoresMap.set(r, score);
+      }));
+    }
+
     // Calculate per-task averages
     for (const [taskName, taskResults] of Object.entries(taskGroups)) {
-      const taskScores = taskResults.map(r => this.scoreResult(r));
+      const taskScores = taskResults.map(r => scoresMap.get(r)).filter(Boolean);
       comparison.by_task[taskName] = this.aggregateScores(taskScores);
     }
 
     // Calculate per-model averages  
     for (const [modelId, modelResults] of Object.entries(modelGroups)) {
-      const modelScores = modelResults.map(r => this.scoreResult(r));
+      const modelScores = modelResults.map(r => scoresMap.get(r)).filter(Boolean);
       comparison.by_model[modelId] = this.aggregateScores(modelScores);
     }
 
     // Overall summary
     const allScores = results
-      .filter(r => r.completed || r.error)
-      .map(r => this.scoreResult(r));
+      .filter(r => (r.completed || r.error) && scoresMap.has(r))
+      .map(r => scoresMap.get(r));
     comparison.summary = this.aggregateScores(allScores);
 
     return comparison;
@@ -181,7 +324,8 @@ class BishopScorer {
     console.log(`📊 Analyzing results from: ${path.basename(resultPath)}`);
     
     const results = this.loadResults(resultPath);
-    const comparison = this.generateComparison(results);
+    const tasksMap = this.loadTasks();
+    const comparison = await this.generateComparison(results, tasksMap);
     
     // Save detailed comparison
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
