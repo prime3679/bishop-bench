@@ -281,7 +281,7 @@ class BishopEvaluator {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const resultsFile = path.join(this.resultsDir, `eval-${timestamp}.json`);
     
-    fs.writeFileSync(resultsFile, JSON.stringify(results, null, 2));
+    await fs.promises.writeFile(resultsFile, JSON.stringify(results, null, 2));
     console.log(`\\n📊 Results saved to: ${resultsFile}`);
     
     return results;
@@ -345,3 +345,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopEvaluator };
