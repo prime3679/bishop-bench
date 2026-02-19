@@ -199,11 +199,25 @@ class BishopScorer {
 // Simple sprintf implementation for table formatting
 function sprintf(format, ...args) {
   let i = 0;
-  return format.replace(/%[sd%]/g, (match) => {
-    if (match === '%%') return '%';
+  return format.replace(/%(-)?(\d+)?([sd%])/g, (match, align, width, type) => {
+    if (type === '%') return '%';
+
     if (i >= args.length) return match;
     const arg = args[i++];
-    return match === '%s' ? String(arg) : match === '%d' ? Number(arg) : arg;
+
+    let str = String(arg);
+    if (type === 'd') str = parseInt(arg, 10).toString();
+
+    if (width) {
+      const w = parseInt(width, 10);
+      if (align === '-') {
+        str = str.padEnd(w);
+      } else {
+        str = str.padStart(w);
+      }
+    }
+
+    return str;
   });
 }
 
@@ -245,3 +259,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopScorer, sprintf };
