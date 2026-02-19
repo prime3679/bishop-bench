@@ -7,28 +7,8 @@ const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 
 // Supported models and their configurations
-const MODELS = {
-  'claude-3-5-haiku-latest': {
-    name: 'Claude Haiku 3.5',
-    provider: 'anthropic',
-    cost_per_1m_tokens: { input: 0.80, output: 4.00 }
-  },
-  'claude-sonnet-4-20250514': {
-    name: 'Claude Sonnet 4',
-    provider: 'anthropic',
-    cost_per_1m_tokens: { input: 3.00, output: 15.00 }
-  },
-  'claude-opus-4-20250514': {
-    name: 'Claude Opus 4.6',
-    provider: 'anthropic',
-    cost_per_1m_tokens: { input: 15.00, output: 75.00 }
-  },
-  'gpt-5.2-codex': {
-    name: 'GPT-5.2 Codex',
-    provider: 'openai',
-    cost_per_1m_tokens: { input: 1.75, output: 14.00 }
-  }
-};
+const MODELS_FILE = path.join(__dirname, 'models.yaml');
+const MODELS = yaml.load(fs.readFileSync(MODELS_FILE, 'utf8'));
 
 const DEFAULT_TIMEOUT_MS = 120000;
 
