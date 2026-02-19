@@ -57,6 +57,11 @@ class BishopEvaluator {
       const taskPath = path.join(this.tasksDir, file);
       const content = fs.readFileSync(taskPath, 'utf8');
       const task = yaml.load(content);
+
+      if (!task || typeof task !== 'object' || !task.name || typeof task.name !== 'string' || !task.prompt || typeof task.prompt !== 'string') {
+        console.warn(`⚠️  Skipping invalid task file: ${file}`);
+        continue;
+      }
       
       if (!taskFilter || task.name === taskFilter) {
         tasks.push({ ...task, filename: file });
@@ -344,4 +349,6 @@ Examples:
 
 if (require.main === module) {
   main().catch(console.error);
+} else {
+  module.exports = { BishopEvaluator };
 }
