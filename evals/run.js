@@ -33,12 +33,12 @@ const MODELS = {
 const DEFAULT_TIMEOUT_MS = 120000;
 
 class BishopEvaluator {
-  constructor() {
-    this.tasksDir = path.join(__dirname, '..', 'tasks');
-    this.resultsDir = path.join(__dirname, '..', 'results');
+  constructor(options = {}) {
+    this.tasksDir = options.tasksDir || path.join(__dirname, '..', 'tasks');
+    this.resultsDir = options.resultsDir || path.join(__dirname, '..', 'results');
     this.ensureDirectories();
-    this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    this.anthropic = options.anthropic || new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    this.openai = options.openai || new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   }
 
   ensureDirectories() {
@@ -55,11 +55,25 @@ class BishopEvaluator {
     const tasks = [];
     for (const file of taskFiles) {
       const taskPath = path.join(this.tasksDir, file);
-      const content = fs.readFileSync(taskPath, 'utf8');
-      const task = yaml.load(content);
-      
-      if (!taskFilter || task.name === taskFilter) {
-        tasks.push({ ...task, filename: file });
+      try {
+        const content = fs.readFileSync(taskPath, 'utf8');
+        const task = yaml.load(content);
+
+        if (!task || typeof task !== 'object') {
+          console.warn(`⚠️  Skipping invalid task file: ${file} (not a valid YAML object)`);
+          continue;
+        }
+
+        if (!task.name) {
+          console.warn(`⚠️  Skipping invalid task file: ${file} (missing 'name' field)`);
+          continue;
+        }
+
+        if (!taskFilter || task.name === taskFilter) {
+          tasks.push({ ...task, filename: file });
+        }
+      } catch (error) {
+        console.warn(`⚠️  Error loading task file ${file}: ${error.message}`);
       }
     }
     
@@ -345,3 +359,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopEvaluator };
