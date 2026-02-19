@@ -75,18 +75,10 @@ class BishopEvaluator {
   }
 
   extractOpenAIText(response) {
-    if (response && typeof response.output_text === 'string') return response.output_text;
-    if (!response || !Array.isArray(response.output)) return '';
-    const chunks = [];
-    for (const item of response.output) {
-      if (!item || !Array.isArray(item.content)) continue;
-      for (const part of item.content) {
-        if (part && part.type === 'output_text' && typeof part.text === 'string') {
-          chunks.push(part.text);
-        }
-      }
+    if (response && response.choices && response.choices.length > 0) {
+      return response.choices[0].message.content || '';
     }
-    return chunks.join('');
+    return '';
   }
 
   async withTimeout(promise, timeoutMs) {
@@ -185,9 +177,9 @@ class BishopEvaluator {
           throw new Error('Missing OPENAI_API_KEY env var');
         }
         response = await this.withTimeout(
-          this.openai.responses.create({
+          this.openai.chat.completions.create({
             model: modelId,
-            input: [{ role: 'user', content: task.prompt }]
+            messages: [{ role: 'user', content: task.prompt }]
           }),
           timeoutMs
         );
@@ -345,3 +337,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopEvaluator, MODELS };
