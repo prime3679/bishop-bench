@@ -4,7 +4,7 @@
   "description": "Model routing benchmark for AI assistants",
   "main": "evals/run.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "node --test",
     "eval": "node evals/run.js",
     "score": "node scoring/score.js"
   },
