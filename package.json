@@ -4,7 +4,7 @@
   "description": "Model routing benchmark for AI assistants",
   "main": "evals/run.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "jest",
     "eval": "node evals/run.js",
     "score": "node scoring/score.js"
   },
@@ -29,12 +29,14 @@
   "homepage": "https://github.com/prime3679/bishop-bench#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",
+    "axios": "^1.6.0",
     "js-yaml": "^4.1.0",
-    "openai": "^4.76.0",
-    "axios": "^1.6.0"
+    "openai": "^4.76.0"
   },
-  "devDependencies": {},
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
   }
 }
