@@ -48,22 +48,22 @@ class BishopEvaluator {
   }
 
   // Load task definitions from YAML files
-  loadTasks(taskFilter = null) {
-    const taskFiles = fs.readdirSync(this.tasksDir)
+  async loadTasks(taskFilter = null) {
+    const taskFiles = (await fs.promises.readdir(this.tasksDir))
       .filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
 
-    const tasks = [];
-    for (const file of taskFiles) {
+    const tasks = await Promise.all(taskFiles.map(async (file) => {
       const taskPath = path.join(this.tasksDir, file);
-      const content = fs.readFileSync(taskPath, 'utf8');
+      const content = await fs.promises.readFile(taskPath, 'utf8');
       const task = yaml.load(content);
       
       if (!taskFilter || task.name === taskFilter) {
-        tasks.push({ ...task, filename: file });
+        return { ...task, filename: file };
       }
-    }
+      return null;
+    }));
     
-    return tasks;
+    return tasks.filter(task => task !== null);
   }
 
   extractAnthropicText(message) {
@@ -238,7 +238,7 @@ class BishopEvaluator {
   async runEvaluation(options = {}) {
     const { taskFilter = null, modelFilter = null, runs = 1, dryRun = false } = options;
     
-    const tasks = this.loadTasks(taskFilter);
+    const tasks = await this.loadTasks(taskFilter);
     const modelsToTest = modelFilter 
       ? modelFilter.split(',').map(m => m.trim())
       : Object.keys(MODELS);
