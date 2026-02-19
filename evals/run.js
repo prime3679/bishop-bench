@@ -342,6 +342,8 @@ Examples:
   await evaluator.runEvaluation(options);
 }
 
+module.exports = { BishopEvaluator };
+
 if (require.main === module) {
   main().catch(console.error);
 }
