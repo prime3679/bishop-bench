@@ -234,9 +234,29 @@ class BishopEvaluator {
     return Math.round((inputCost + outputCost) * 1000000) / 1000000; // Round to 6 decimal places
   }
 
+  async runWithConcurrency(tasks, limit) {
+    const results = [];
+    const executing = [];
+
+    for (const task of tasks) {
+      const p = task().then(res => {
+        executing.splice(executing.indexOf(p), 1);
+        return res;
+      });
+      executing.push(p);
+      results.push(p);
+
+      if (executing.length >= limit) {
+        await Promise.race(executing);
+      }
+    }
+
+    return Promise.all(results);
+  }
+
   // Run evaluation across all specified tasks and models
   async runEvaluation(options = {}) {
-    const { taskFilter = null, modelFilter = null, runs = 1, dryRun = false } = options;
+    const { taskFilter = null, modelFilter = null, runs = 1, dryRun = false, concurrency = 8 } = options;
     
     const tasks = this.loadTasks(taskFilter);
     const modelsToTest = modelFilter 
@@ -250,6 +270,8 @@ class BishopEvaluator {
     for (const task of tasks) {
       console.log(`\\n📋 Task: ${task.name}`);
       
+      const taskExecutions = [];
+
       for (const modelId of modelsToTest) {
         if (!MODELS[modelId]) {
           console.warn(`⚠️  Unknown model: ${modelId}`);
@@ -257,23 +279,30 @@ class BishopEvaluator {
         }
 
         for (let runIndex = 1; runIndex <= runs; runIndex += 1) {
-          try {
-            const result = await this.executeTask(task, modelId, MODELS[modelId], {
-              dryRun,
-              runIndex
-            });
-            results.push(result);
-          } catch (error) {
-            console.error(`❌ Error running ${task.name} on ${modelId}:`, error.message);
-            results.push({
-              task_name: task.name,
-              model_id: modelId,
-              run_index: runIndex,
-              error: error.message,
-              completed: false
-            });
-          }
+          taskExecutions.push(async () => {
+            try {
+              const result = await this.executeTask(task, modelId, MODELS[modelId], {
+                dryRun,
+                runIndex
+              });
+              return result;
+            } catch (error) {
+              console.error(`❌ Error running ${task.name} on ${modelId}:`, error.message);
+              return {
+                task_name: task.name,
+                model_id: modelId,
+                run_index: runIndex,
+                error: error.message,
+                completed: false
+              };
+            }
+          });
         }
+      }
+
+      if (taskExecutions.length > 0) {
+        const batchResults = await this.runWithConcurrency(taskExecutions, concurrency);
+        results.push(...batchResults);
       }
     }
     
@@ -345,3 +374,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopEvaluator };
