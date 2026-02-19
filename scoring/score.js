@@ -10,11 +10,19 @@ class BishopScorer {
 
   // Load evaluation results from JSON file
   loadResults(resultFile) {
-    if (!fs.existsSync(resultFile)) {
+    // Security check: ensure file is within results directory
+    const resolvedPath = path.resolve(resultFile);
+    const resolvedResultsDir = path.resolve(this.resultsDir);
+
+    if (!resolvedPath.startsWith(resolvedResultsDir + path.sep)) {
+      throw new Error(`Invalid results file path: ${resultFile}. Must be within ${this.resultsDir}`);
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
       throw new Error(`Results file not found: ${resultFile}`);
     }
     
-    const content = fs.readFileSync(resultFile, 'utf8');
+    const content = fs.readFileSync(resolvedPath, 'utf8');
     return JSON.parse(content);
   }
 
