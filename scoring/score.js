@@ -9,13 +9,16 @@ class BishopScorer {
   }
 
   // Load evaluation results from JSON file
-  loadResults(resultFile) {
-    if (!fs.existsSync(resultFile)) {
-      throw new Error(`Results file not found: ${resultFile}`);
+  async loadResults(resultFile) {
+    try {
+      const content = await fs.promises.readFile(resultFile, 'utf8');
+      return JSON.parse(content);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        throw new Error(`Results file not found: ${resultFile}`);
+      }
+      throw error;
     }
-    
-    const content = fs.readFileSync(resultFile, 'utf8');
-    return JSON.parse(content);
   }
 
   // Find the most recent results file if no specific file provided
@@ -180,7 +183,7 @@ class BishopScorer {
     const resultPath = resultsFile || this.getLatestResults();
     console.log(`📊 Analyzing results from: ${path.basename(resultPath)}`);
     
-    const results = this.loadResults(resultPath);
+    const results = await this.loadResults(resultPath);
     const comparison = this.generateComparison(results);
     
     // Save detailed comparison
@@ -244,4 +247,6 @@ Examples:
 
 if (require.main === module) {
   main().catch(console.error);
+} else {
+  module.exports = { BishopScorer };
 }
