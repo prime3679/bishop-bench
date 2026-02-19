@@ -124,8 +124,8 @@ class BishopScorer {
       const values = scoresList.map(s => s[key]).filter(v => typeof v === 'number' && !isNaN(v));
       if (values.length > 0) {
         aggregated[`${key}_avg`] = values.reduce((a, b) => a + b, 0) / values.length;
-        aggregated[`${key}_min`] = Math.min(...values);
-        aggregated[`${key}_max`] = Math.max(...values);
+        aggregated[`${key}_min`] = values.reduce((min, v) => (v < min ? v : min), values[0]);
+        aggregated[`${key}_max`] = values.reduce((max, v) => (v > max ? v : max), values[0]);
       }
     }
     
@@ -186,7 +186,7 @@ class BishopScorer {
     // Save detailed comparison
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const comparisonFile = path.join(this.resultsDir, `comparison-${timestamp}.json`);
-    fs.writeFileSync(comparisonFile, JSON.stringify(comparison, null, 2));
+    await fs.promises.writeFile(comparisonFile, JSON.stringify(comparison, null, 2));
     
     // Display summary table
     console.log(this.formatTable(comparison));
@@ -245,3 +245,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopScorer };
