@@ -39,6 +39,11 @@ class BishopEvaluator {
     this.ensureDirectories();
     this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+    this.providerHandlers = {
+      'anthropic': this.handleAnthropic.bind(this),
+      'openai': this.handleOpenAI.bind(this)
+    };
   }
 
   ensureDirectories() {
@@ -87,6 +92,51 @@ class BishopEvaluator {
       }
     }
     return chunks.join('');
+  }
+
+  async handleAnthropic(modelId, prompt, timeoutMs) {
+    if (!process.env.ANTHROPIC_API_KEY) {
+      throw new Error('Missing ANTHROPIC_API_KEY env var');
+    }
+    const response = await this.withTimeout(
+      this.anthropic.messages.create({
+        model: modelId,
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }]
+      }),
+      timeoutMs
+    );
+    const outputText = this.extractAnthropicText(response);
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
+
+    return {
+      output: outputText,
+      inputTokens,
+      outputTokens
+    };
+  }
+
+  async handleOpenAI(modelId, prompt, timeoutMs) {
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('Missing OPENAI_API_KEY env var');
+    }
+    const response = await this.withTimeout(
+      this.openai.responses.create({
+        model: modelId,
+        input: [{ role: 'user', content: prompt }]
+      }),
+      timeoutMs
+    );
+    const outputText = this.extractOpenAIText(response);
+    const inputTokens = response.usage?.input_tokens || 0;
+    const outputTokens = response.usage?.output_tokens || 0;
+
+    return {
+      output: outputText,
+      inputTokens,
+      outputTokens
+    };
   }
 
   async withTimeout(promise, timeoutMs) {
@@ -151,62 +201,23 @@ class BishopEvaluator {
     }
 
     try {
-      let response;
-
-      if (modelConfig.provider === 'anthropic') {
-        if (!process.env.ANTHROPIC_API_KEY) {
-          throw new Error('Missing ANTHROPIC_API_KEY env var');
-        }
-        response = await this.withTimeout(
-          this.anthropic.messages.create({
-            model: modelId,
-            max_tokens: 1024,
-            messages: [{ role: 'user', content: task.prompt }]
-          }),
-          timeoutMs
-        );
-        const outputText = this.extractAnthropicText(response);
-        const inputTokens = response.usage?.input_tokens || 0;
-        const outputTokens = response.usage?.output_tokens || 0;
-        const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
-        return {
-          ...baseResult,
-          output: outputText,
-          latency_ms: Math.round(latencyMs),
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          total_tokens: inputTokens + outputTokens,
-          cost_usd: this.calculateCost(inputTokens, outputTokens, modelConfig.cost_per_1m_tokens)
-        };
+      const handler = this.providerHandlers[modelConfig.provider];
+      if (!handler) {
+        throw new Error(`Unsupported provider: ${modelConfig.provider}`);
       }
 
-      if (modelConfig.provider === 'openai') {
-        if (!process.env.OPENAI_API_KEY) {
-          throw new Error('Missing OPENAI_API_KEY env var');
-        }
-        response = await this.withTimeout(
-          this.openai.responses.create({
-            model: modelId,
-            input: [{ role: 'user', content: task.prompt }]
-          }),
-          timeoutMs
-        );
-        const outputText = this.extractOpenAIText(response);
-        const inputTokens = response.usage?.input_tokens || 0;
-        const outputTokens = response.usage?.output_tokens || 0;
-        const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
-        return {
-          ...baseResult,
-          output: outputText,
-          latency_ms: Math.round(latencyMs),
-          input_tokens: inputTokens,
-          output_tokens: outputTokens,
-          total_tokens: inputTokens + outputTokens,
-          cost_usd: this.calculateCost(inputTokens, outputTokens, modelConfig.cost_per_1m_tokens)
-        };
-      }
+      const { output, inputTokens, outputTokens } = await handler(modelId, task.prompt, timeoutMs);
 
-      throw new Error(`Unsupported provider: ${modelConfig.provider}`);
+      const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
+      return {
+        ...baseResult,
+        output,
+        latency_ms: Math.round(latencyMs),
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        total_tokens: inputTokens + outputTokens,
+        cost_usd: this.calculateCost(inputTokens, outputTokens, modelConfig.cost_per_1m_tokens)
+      };
     } catch (error) {
       const latencyMs = Number(process.hrtime.bigint() - startTime) / 1e6;
       const status = error?.status || error?.response?.status;
@@ -345,3 +356,4 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+module.exports = { BishopEvaluator };
