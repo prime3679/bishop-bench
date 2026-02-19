@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { sprintf } = require('sprintf-js');
 
 class BishopScorer {
   constructor() {
@@ -196,17 +197,6 @@ class BishopScorer {
   }
 }
 
-// Simple sprintf implementation for table formatting
-function sprintf(format, ...args) {
-  let i = 0;
-  return format.replace(/%[sd%]/g, (match) => {
-    if (match === '%%') return '%';
-    if (i >= args.length) return match;
-    const arg = args[i++];
-    return match === '%s' ? String(arg) : match === '%d' ? Number(arg) : arg;
-  });
-}
-
 // CLI interface
 async function main() {
   const args = process.argv.slice(2);
@@ -245,3 +235,5 @@ Examples:
 if (require.main === module) {
   main().catch(console.error);
 }
+
+module.exports = { BishopScorer };
