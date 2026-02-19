@@ -242,6 +242,8 @@ Examples:
   await scorer.scoreResults(options);
 }
 
+module.exports = { BishopScorer };
+
 if (require.main === module) {
   main().catch(console.error);
 }

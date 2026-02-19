@@ -29,11 +29,13 @@
   "homepage": "https://github.com/prime3679/bishop-bench#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.36.0",
+    "axios": "^1.6.0",
     "js-yaml": "^4.1.0",
-    "openai": "^4.76.0",
-    "axios": "^1.6.0"
+    "openai": "^4.76.0"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "jest": "^30.2.0"
+  },
   "engines": {
     "node": ">=18.0.0"
   }
