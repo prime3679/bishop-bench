@@ -212,13 +212,18 @@ async function main() {
   const args = process.argv.slice(2);
   const options = {};
   
-  for (let i = 0; i < args.length; i += 2) {
-    const flag = args[i];
-    const value = args[i + 1];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
     
-    switch (flag) {
+    switch (arg) {
       case '--results':
-        options.resultsFile = value;
+        if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+          options.resultsFile = args[i + 1];
+          i++; // Consume the value
+        } else {
+          console.error('Error: --results requires a file path argument');
+          process.exit(1);
+        }
         break;
       case '--help':
         console.log(`
@@ -235,6 +240,8 @@ Examples:
   node score.js --results eval-2025-02-16.json
         `);
         return;
+      default:
+        console.warn(`Warning: Unknown argument "${arg}" ignored`);
     }
   }
   
