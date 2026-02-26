@@ -277,15 +277,15 @@ Return ONLY a valid JSON object with:
 
   // Format results as a readable table
   formatTable(comparison) {
-    let output = "\\n📊 BISHOP BENCHMARK RESULTS\\n";
-    output += "=" + "=".repeat(50) + "\\n\\n";
+    let output = "\n📊 BISHOP BENCHMARK RESULTS\n";
+    output += "=" + "=".repeat(50) + "\n\n";
 
     // Model comparison table
-    output += "🤖 MODEL PERFORMANCE SUMMARY\\n";
-    output += "-".repeat(80) + "\\n";
-    output += sprintf("%-25s %8s %8s %10s %8s\\n", 
+    output += "🤖 MODEL PERFORMANCE SUMMARY\n";
+    output += "-".repeat(80) + "\n";
+    output += sprintf("%-25s %8s %8s %10s %8s\n",
       "Model", "Success%", "AvgCost", "AvgLatency", "Tokens/s");
-    output += "-".repeat(80) + "\\n";
+    output += "-".repeat(80) + "\n";
 
     for (const [modelId, scores] of Object.entries(comparison.by_model)) {
       const successRate = ((scores.completion_rate_avg || 0) * 100).toFixed(1);
@@ -293,23 +293,23 @@ Return ONLY a valid JSON object with:
       const avgLatency = (scores.latency_ms_avg || 0).toFixed(0);
       const tokensPerSec = (scores.tokens_per_second_avg || 0).toFixed(1);
       
-      output += sprintf("%-25s %7s%% $%7s %8sms %7s\\n",
+      output += sprintf("%-25s %7s%% $%7s %8sms %7s\n",
         modelId.substring(0, 25), successRate, avgCost, avgLatency, tokensPerSec);
     }
 
-    output += "\\n";
+    output += "\n";
 
     // Task difficulty analysis
-    output += "📋 TASK DIFFICULTY ANALYSIS\\n";
-    output += "-".repeat(60) + "\\n";
-    output += sprintf("%-20s %12s %12s\\n", "Task", "Avg Success%", "Avg Cost");
-    output += "-".repeat(60) + "\\n";
+    output += "📋 TASK DIFFICULTY ANALYSIS\n";
+    output += "-".repeat(60) + "\n";
+    output += sprintf("%-20s %12s %12s\n", "Task", "Avg Success%", "Avg Cost");
+    output += "-".repeat(60) + "\n";
 
     for (const [taskName, scores] of Object.entries(comparison.by_task)) {
       const successRate = ((scores.completion_rate_avg || 0) * 100).toFixed(1);
       const avgCost = (scores.cost_usd_avg || 0).toFixed(4);
       
-      output += sprintf("%-20s %11s%% $%10s\\n",
+      output += sprintf("%-20s %11s%% $%10s\n",
         taskName.substring(0, 20), successRate, avgCost);
     }
 
@@ -334,20 +334,46 @@ Return ONLY a valid JSON object with:
     
     // Display summary table
     console.log(this.formatTable(comparison));
-    console.log(`\\n📁 Detailed comparison saved to: ${path.basename(comparisonFile)}`);
+    console.log(`\n📁 Detailed comparison saved to: ${path.basename(comparisonFile)}`);
     
     return comparison;
   }
 }
 
-// Simple sprintf implementation for table formatting
+// Improved sprintf implementation for table formatting
 function sprintf(format, ...args) {
   let i = 0;
-  return format.replace(/%[sd%]/g, (match) => {
+  return format.replace(/%([-+])?(\d+)?(\.\d+)?[sd%]/g, (match, align, width, precision) => {
     if (match === '%%') return '%';
     if (i >= args.length) return match;
-    const arg = args[i++];
-    return match === '%s' ? String(arg) : match === '%d' ? Number(arg) : arg;
+    let arg = args[i++];
+    const type = match.slice(-1);
+
+    // Basic type handling
+    if (type === 's') arg = String(arg);
+    else if (type === 'd') arg = Number(arg);
+
+    // Precision handling (not strictly used in this codebase but good for completeness if we add regex support for it,
+    // though the regex allows it, we can just ignore it or implement simple logic)
+    // The current usage doesn't seem to use precision like %.2f, but %8s.
+
+    // Convert to string for padding
+    let str = String(arg);
+
+    // Padding
+    if (width) {
+      const w = parseInt(width, 10);
+      if (str.length < w) {
+        const padding = ' '.repeat(w - str.length);
+        if (align === '-') {
+          str = str + padding;
+        } else {
+          str = padding + str;
+        }
+      }
+    }
+
+    return str;
   });
 }
 
@@ -397,4 +423,4 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-module.exports = { BishopScorer };
+module.exports = { BishopScorer, sprintf };
