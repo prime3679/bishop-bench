@@ -4,7 +4,7 @@
   "description": "Model routing benchmark for AI assistants",
   "main": "evals/run.js",
   "scripts": {
-    "test": "node tests/test_score.js",
+    "test": "node tests/test_score.js && node tests/evals_run.test.js",
     "eval": "node evals/run.js",
     "score": "node scoring/score.js"
   },
