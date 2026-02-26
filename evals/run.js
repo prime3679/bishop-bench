@@ -137,6 +137,9 @@ class BishopEvaluator {
         if (!process.env.ANTHROPIC_API_KEY) {
           throw new Error('Missing ANTHROPIC_API_KEY env var');
         }
+        if (!process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-')) {
+          throw new Error('Invalid ANTHROPIC_API_KEY format (must start with "sk-ant-")');
+        }
         response = await this.withTimeout(
           this.anthropic.messages.create({
             model: modelId,
@@ -163,6 +166,9 @@ class BishopEvaluator {
       if (modelConfig.provider === 'openai') {
         if (!process.env.OPENAI_API_KEY) {
           throw new Error('Missing OPENAI_API_KEY env var');
+        }
+        if (!process.env.OPENAI_API_KEY.startsWith('sk-')) {
+          throw new Error('Invalid OPENAI_API_KEY format (must start with "sk-")');
         }
         response = await this.withTimeout(
           this.openai.responses.create({
