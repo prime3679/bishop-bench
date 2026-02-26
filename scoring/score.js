@@ -343,11 +343,22 @@ Return ONLY a valid JSON object with:
 // Simple sprintf implementation for table formatting
 function sprintf(format, ...args) {
   let i = 0;
-  return format.replace(/%[sd%]/g, (match) => {
-    if (match === '%%') return '%';
+  return format.replace(/%(-)?(\d+)?([sd%])/g, (match, align, width, type) => {
+    if (type === '%') return '%';
     if (i >= args.length) return match;
+
     const arg = args[i++];
-    return match === '%s' ? String(arg) : match === '%d' ? Number(arg) : arg;
+    let str = type === 's' ? String(arg) : type === 'd' ? Number(arg).toString() : String(arg);
+
+    if (width) {
+      const w = parseInt(width, 10);
+      if (str.length < w) {
+        const padding = ' '.repeat(w - str.length);
+        return align === '-' ? str + padding : padding + str;
+      }
+    }
+
+    return str;
   });
 }
 
@@ -397,4 +408,4 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-module.exports = { BishopScorer };
+module.exports = { BishopScorer, sprintf };
