@@ -262,13 +262,31 @@ Return ONLY a valid JSON object with:
     
     const aggregated = {};
     const keys = Object.keys(scoresList[0]);
-    
+    const stats = {};
+
     for (const key of keys) {
-      const values = scoresList.map(s => s[key]).filter(v => typeof v === 'number' && !isNaN(v));
-      if (values.length > 0) {
-        aggregated[`${key}_avg`] = values.reduce((a, b) => a + b, 0) / values.length;
-        aggregated[`${key}_min`] = Math.min(...values);
-        aggregated[`${key}_max`] = Math.max(...values);
+      stats[key] = { sum: 0, count: 0, min: Infinity, max: -Infinity };
+    }
+    
+    for (const s of scoresList) {
+      for (const key of keys) {
+        const v = s[key];
+        if (typeof v === 'number' && !isNaN(v)) {
+          const stat = stats[key];
+          stat.sum += v;
+          stat.count++;
+          if (v < stat.min) stat.min = v;
+          if (v > stat.max) stat.max = v;
+        }
+      }
+    }
+
+    for (const key of keys) {
+      const stat = stats[key];
+      if (stat.count > 0) {
+        aggregated[`${key}_avg`] = stat.sum / stat.count;
+        aggregated[`${key}_min`] = stat.min;
+        aggregated[`${key}_max`] = stat.max;
       }
     }
     
