@@ -37,14 +37,16 @@ class BishopScorer {
   }
 
   // Load task definitions from YAML files
-  loadTasks() {
-    const taskFiles = fs.readdirSync(this.tasksDir)
+  async loadTasks() {
+    const taskFiles = (await fs.promises.readdir(this.tasksDir))
       .filter(file => file.endsWith('.yaml') || file.endsWith('.yml'));
 
     const tasksMap = {};
-    for (const file of taskFiles) {
-      const taskPath = path.join(this.tasksDir, file);
-      const content = fs.readFileSync(taskPath, 'utf8');
+    const contents = await Promise.all(
+      taskFiles.map(file => fs.promises.readFile(path.join(this.tasksDir, file), 'utf8'))
+    );
+
+    for (const content of contents) {
       const task = yaml.load(content);
       tasksMap[task.name] = task;
     }
@@ -324,7 +326,7 @@ Return ONLY a valid JSON object with:
     console.log(`📊 Analyzing results from: ${path.basename(resultPath)}`);
     
     const results = this.loadResults(resultPath);
-    const tasksMap = this.loadTasks();
+    const tasksMap = await this.loadTasks();
     const comparison = await this.generateComparison(results, tasksMap);
     
     // Save detailed comparison
