@@ -8,7 +8,15 @@ const OpenAI = require('openai');
 
 // Supported models and their configurations
 const MODELS_FILE = path.join(__dirname, 'models.yaml');
-const MODELS = yaml.load(fs.readFileSync(MODELS_FILE, 'utf8'));
+
+let MODELS;
+try {
+  MODELS = yaml.load(fs.readFileSync(MODELS_FILE, 'utf8'));
+} catch (error) {
+  console.error(`Error loading configuration from ${MODELS_FILE}:`);
+  console.error(error.message);
+  process.exit(1);
+}
 
 const DEFAULT_TIMEOUT_MS = 120000;
 
