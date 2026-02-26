@@ -19,7 +19,11 @@ class BishopScorer {
     }
     
     const content = fs.readFileSync(resultFile, 'utf8');
-    return JSON.parse(content);
+    try {
+      return JSON.parse(content);
+    } catch (e) {
+      throw new Error(`Failed to parse results file ${resultFile}: ${e.message}`);
+    }
   }
 
   // Find the most recent results file if no specific file provided
