@@ -14,11 +14,23 @@ class BishopScorer {
 
   // Load evaluation results from JSON file
   loadResults(resultFile) {
-    if (!fs.existsSync(resultFile)) {
+    // Resolve absolute paths for security check
+    const resolvedPath = path.resolve(resultFile);
+    const resolvedResultsDir = path.resolve(this.resultsDir);
+
+    // Ensure the file is within the results directory
+    const isInsideResultsDir = resolvedPath.startsWith(resolvedResultsDir + path.sep) ||
+                               resolvedPath === resolvedResultsDir;
+
+    if (!isInsideResultsDir) {
+      throw new Error(`Security Error: Access denied. Cannot load files outside of the results directory: ${resultFile}`);
+    }
+
+    if (!fs.existsSync(resolvedPath)) {
       throw new Error(`Results file not found: ${resultFile}`);
     }
-    
-    const content = fs.readFileSync(resultFile, 'utf8');
+
+    const content = fs.readFileSync(resolvedPath, 'utf8');
     try {
       return JSON.parse(content);
     } catch (error) {
