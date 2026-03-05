@@ -53,4 +53,64 @@ assert.strictEqual(mixedResult.b_avg, undefined, 'Keys not in first element shou
 
 console.log('✅ Passed');
 
+
+// Test 4: formatTable with complete data (Happy Path)
+console.log('Test 4: formatTable with complete data');
+const completeComparison = {
+  by_model: {
+    'test-model-1': {
+      completion_rate_avg: 0.95,
+      cost_usd_avg: 0.015,
+      latency_ms_avg: 500,
+      tokens_per_second_avg: 20.5
+    }
+  },
+  by_task: {
+    'task-1': {
+      completion_rate_avg: 0.9,
+      cost_usd_avg: 0.01
+    }
+  }
+};
+const outputComplete = scorer.formatTable(completeComparison);
+assert(outputComplete.includes('test-model-1'), 'Should contain model name');
+assert(outputComplete.includes('95.0%'), 'Should format completion rate correctly');
+assert(outputComplete.includes('0.0150'), 'Should format cost correctly');
+assert(outputComplete.includes('500ms'), 'Should format latency correctly');
+assert(outputComplete.includes('20.5'), 'Should format tokens per second correctly');
+assert(outputComplete.includes('task-1'), 'Should contain task name');
+assert(outputComplete.includes('90.0%'), 'Should format task completion rate correctly');
+assert(outputComplete.includes('0.0100'), 'Should format task cost correctly');
+console.log('✅ Passed');
+
+// Test 5: formatTable with empty comparison object (Edge/Empty Case)
+console.log('Test 5: formatTable with empty data');
+const emptyComparison = {
+  by_model: {},
+  by_task: {}
+};
+const outputEmpty = scorer.formatTable(emptyComparison);
+assert(outputEmpty.includes('MODEL PERFORMANCE SUMMARY'), 'Should contain model summary header');
+assert(outputEmpty.includes('TASK DIFFICULTY ANALYSIS'), 'Should contain task difficulty header');
+// Ensure it doesn't crash and returns the headers properly
+console.log('✅ Passed');
+
+// Test 6: formatTable with missing metrics (Missing/Partial Data)
+console.log('Test 6: formatTable with missing metrics');
+const missingComparison = {
+  by_model: {
+    'test-model-2': {} // No metrics provided
+  },
+  by_task: {
+    'task-2': {} // No metrics provided
+  }
+};
+const outputMissing = scorer.formatTable(missingComparison);
+assert(outputMissing.includes('test-model-2'), 'Should contain model name');
+assert(outputMissing.includes('0.0%'), 'Should default completion rate to 0.0%');
+assert(outputMissing.includes('0.0000'), 'Should default cost to 0.0000');
+assert(outputMissing.includes('0ms'), 'Should default latency to 0ms');
+assert(outputMissing.includes('0.0'), 'Should default tokens per second to 0.0');
+assert(outputMissing.includes('task-2'), 'Should contain task name');
+console.log('✅ Passed');
 console.log('🎉 All tests passed!');
