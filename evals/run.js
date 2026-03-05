@@ -25,8 +25,8 @@ class BishopEvaluator {
     this.tasksDir = path.join(__dirname, '..', 'tasks');
     this.resultsDir = path.join(__dirname, '..', 'results');
     this.ensureDirectories();
-    this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    this.anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
+    this.openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
   }
 
   ensureDirectories() {
@@ -148,6 +148,9 @@ class BishopEvaluator {
         if (!process.env.ANTHROPIC_API_KEY.startsWith('sk-ant-')) {
           throw new Error('Invalid ANTHROPIC_API_KEY format (must start with "sk-ant-")');
         }
+        if (!this.anthropic) {
+          this.anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+        }
         response = await this.withTimeout(
           this.anthropic.messages.create({
             model: modelId,
@@ -177,6 +180,9 @@ class BishopEvaluator {
         }
         if (!process.env.OPENAI_API_KEY.startsWith('sk-')) {
           throw new Error('Invalid OPENAI_API_KEY format (must start with "sk-")');
+        }
+        if (!this.openai) {
+          this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
         }
         response = await this.withTimeout(
           this.openai.responses.create({
