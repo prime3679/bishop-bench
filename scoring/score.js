@@ -282,6 +282,10 @@ Return ONLY a valid JSON object with:
     const keys = Object.keys(scoresList[0]);
     
     for (const key of keys) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue;
+      }
+
       // Single pass calculation for sum, min, max
       let sum = 0;
       let min = Infinity;

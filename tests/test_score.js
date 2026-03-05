@@ -53,4 +53,16 @@ assert.strictEqual(mixedResult.b_avg, undefined, 'Keys not in first element shou
 
 console.log('✅ Passed');
 
+// Test 4: prototype pollution
+console.log('Test 4: aggregateScores prevents prototype pollution');
+const maliciousScores = JSON.parse('[{"__proto__": 1, "constructor": 1, "prototype": 1, "score": 10}]');
+const safeResult = scorer.aggregateScores(maliciousScores);
+
+assert.strictEqual(safeResult.__proto___avg, undefined, '__proto__ should be ignored');
+assert.strictEqual(safeResult.constructor_avg, undefined, 'constructor should be ignored');
+assert.strictEqual(safeResult.prototype_avg, undefined, 'prototype should be ignored');
+assert.strictEqual(safeResult.score_avg, 10, 'Valid keys should still be processed');
+
+console.log('✅ Passed');
+
 console.log('🎉 All tests passed!');
