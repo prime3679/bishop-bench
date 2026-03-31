@@ -1,39 +1,45 @@
-# Bishop Benchmark Tool
+# bishop-bench
 
-## What is this?
+A lightweight benchmark harness for comparing LLMs on the same assistant task.
 
-Bishop Benchmark is a tool that runs identical tasks across multiple LLM models and compares their quality, cost, and latency. Instead of choosing models based on vibes, make data-driven routing decisions.
+Instead of choosing models on vibes, `bishop-bench` runs the same prompt across multiple models and captures output, latency, token usage, and estimated cost so routing decisions can be grounded in evidence.
 
-## Why does this matter?
+## Current status
 
-Model routing decisions should be grounded in real performance data, not intuition. Different models excel at different tasks:
-- Some are better at tool calling
-- Some are faster for simple queries  
-- Some provide better accuracy for complex reasoning
-- Cost varies dramatically between models
+This repo is working, but still intentionally small.
 
-This benchmark helps you understand which model to use for which types of assistant tasks.
+What exists now:
+- task definitions in YAML
+- multi-model eval runner
+- JSON result capture in `results/`
+- comparison/scoring script for summarizing runs
+- real benchmark outputs already checked into the repo
 
-## How it works
+What it is not yet:
+- a polished dashboard
+- a general-purpose eval platform
+- a full LLM judge/evals framework
 
-1. **Define tasks** in YAML format in the `tasks/` directory
-2. **Run evaluations** across multiple models using the eval runner
-3. **Compare results** with standardized metrics and scoring
-4. **Get a comparison table** showing performance across all dimensions
+## Supported models
 
-### Supported Models
-- `anthropic/claude-haiku` - Fast and economical
-- `anthropic/claude-sonnet` - Balanced performance
-- `anthropic/claude-opus` - Maximum capability  
-- `openai/gpt-5.3-codex` - Code-focused tasks
+The current runner is wired for:
+- Claude Haiku 3.5
+- Claude Sonnet 4
+- Claude Opus 4.6
+- GPT-5.2 Codex
 
-## Planned Metrics
+Model config lives in `evals/run.js`.
 
-- **Tool-call accuracy** - How often the model calls the right tools with correct parameters
-- **Hallucination rate** - Frequency of factual errors or made-up information
-- **Cost per correct outcome** - Economic efficiency for successful task completion
-- **Latency** - Time to first token and total completion time
-- **Task completion rate** - Percentage of tasks completed successfully
+## Repo structure
+
+```text
+bishop-bench/
+├── evals/run.js          # run tasks across one or more models
+├── scoring/score.js      # summarize and compare run results
+├── tasks/                # YAML task definitions
+├── results/              # raw eval outputs + comparison files
+└── README.md
+```
 
 ## Installation
 
@@ -43,57 +49,98 @@ cd bishop-bench
 npm install
 ```
 
-## Usage
+## Environment
+
+Set the model keys you want to use:
 
 ```bash
-# Run all tasks against all models
-node evals/run.js
-
-# Run specific task
-node evals/run.js --task morning-briefing
-
-# Run against specific models
-node evals/run.js --models claude-sonnet,claude-opus
-
-# Compare results
-node scoring/score.js --results results/latest/
+export ANTHROPIC_API_KEY=...
+export OPENAI_API_KEY=...
 ```
 
-## Task Format
+The runner will error cleanly if a required key is missing for a selected model.
 
-Tasks are defined in YAML with this structure:
+## Usage
+
+Run all tasks against all configured models:
+
+```bash
+npm run eval
+```
+
+Run a specific task:
+
+```bash
+node evals/run.js --task morning-briefing
+```
+
+Run only selected models:
+
+```bash
+node evals/run.js --models claude-sonnet-4-20250514,gpt-5.2-codex
+```
+
+Dry run without calling APIs:
+
+```bash
+node evals/run.js --dry-run
+```
+
+Score the latest results:
+
+```bash
+npm run score
+```
+
+Or score a specific results file:
+
+```bash
+node scoring/score.js --results results/eval-2026-02-16T21-43-15-693Z.json
+```
+
+## Task format
+
+Tasks live in `tasks/*.yaml`.
+
+Example:
 
 ```yaml
-name: "task-name"
-description: "What this task tests"
-prompt: "The actual prompt to send to models"
-expected_capabilities: 
-  - web_search
-  - calendar_read  
-  - email_read
+name: "morning-briefing"
+description: "Evaluate morning briefing quality"
+prompt: "Generate a concise morning briefing..."
+expected_capabilities:
+  - summarization
+  - prioritization
 scoring_criteria:
   - completeness
-  - accuracy
-  - formatting
   - actionability
-timeout: 120  # seconds
+timeout: 120
 ```
 
-## Status
+## Output
 
-🚧 **Early Development** 🚧
+Each eval run writes a timestamped JSON file to `results/` with:
+- model name and provider
+- raw output
+- latency
+- input/output/total tokens
+- estimated cost
+- timeout/error state
 
-This tool is actively being built. Current features:
-- [ ] Basic eval runner framework
-- [ ] Task definition format
-- [ ] Model integrations
-- [ ] Scoring algorithms
-- [ ] Result comparison
-- [ ] Web dashboard
+The scoring script also writes a comparison JSON artifact and prints a terminal summary table.
 
-## Contributing
+## Why this exists
 
-This is an experimental tool for model routing research. Contributions welcome!
+This repo came out of a practical problem inside Bishop: different assistant tasks want different models. Some need speed. Some need stronger writing. Some need coding depth. Some need lower cost. `bishop-bench` makes those tradeoffs visible.
+
+## Roadmap
+
+Likely next improvements:
+- better task coverage
+- more diagnostic scoring
+- richer content-quality evaluation
+- improved result visualization
+- repeatable benchmark suites by task family
 
 ## License
 
